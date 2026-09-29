@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git
+.env
+venv/
+.venv/
+.pytest_cache/
+config.yaml
+*.tar

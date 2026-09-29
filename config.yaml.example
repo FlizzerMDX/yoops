@@ -1,0 +1,48 @@
+host: "0.0.0.0"
+port: 5555
+
+routes:
+  connection-triggers:
+    endpoint: "/cotrigger"
+    match_case:
+      connect:
+        triggers_type: or
+        triggers:
+          - key: "event"
+            value: "connect"
+          - key: "payload.Status.IsConnected"
+            value: true
+        message: "<b>🟢 {event}</b>\n\n connected : {payload.Status.IsConnected}"
+      disconnect:
+        triggers:
+          - key: "event"
+            value: "disconnect"
+          - key: "payload.Status.IsConnected"
+            value: false
+        message: "<b>🔴 {event}</b>\n\n connected : {payload.Status.IsConnected}"
+    senders:
+      telegram:
+        bot: ""
+        channel_clean_id: ""
+        channel_full_id: ""
+        parse_mode: "HTML"
+  sample-route:
+    endpoint: "/sr"
+    match_case:
+      connect:
+        triggers_type: and
+        triggers:
+          - key: "ok"
+            value: true
+          - key: "id"
+            value: 1
+        message: "**{value}** is set for id `{id}`"
+    senders:
+      telegram:
+        bot: ""
+        channel_clean_id: ""
+        parse_mode: "MarkdownV2"
+      discord:
+        url: ""
+        username: "webhook_username"
+        avatar_url: "https://cdn.pfps.gg/pfps/5600-aang.png"
