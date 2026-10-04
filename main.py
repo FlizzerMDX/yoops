@@ -8,15 +8,19 @@ import yaml
 
 from flask import Flask, jsonify, request
 
+from func.logs import write_logs
 from func.utils import format_all_str_with_args, format_str_with_args
 from senders.discord import Discord, DiscordConfig
 from senders.telegram import Telegram, TelegramConfig
 
 
 with open("config.yaml") as stream:
+	write_logs(type="INF", content="Chargement du fichier de configuration...")
 	try:
+		write_logs(type="INF", content="Chargement du fichier de configuration terminé avec succès.")
 		config = yaml.safe_load(stream)
 	except yaml.YAMLError as exc:
+		write_logs(type="ERR", content="Erreur lors du chargement du fichier de configuration.")
 		print(exc)
 
 app = Flask(__name__)
