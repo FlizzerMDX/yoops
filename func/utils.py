@@ -1,7 +1,37 @@
 from functools import reduce
 import string
 
-def remove_empty_from_dict(dict):
+def resolve_condition_with_direction(operator_type, value, reference):
+	match operator_type:
+		case "less":
+			return value < reference
+		case "greater":
+			return value > reference
+		case "less_equal":
+			return value <= reference
+		case "greater_equal":
+			return value >= reference
+		case "not_in":
+			return value not in reference
+		case "in":
+			return value in reference
+		case "not_equal":
+			return value != reference
+		case "equal":
+			return value == reference
+		case _:
+			return value == reference
+
+def resolve_condition(operator_type, operator_direction, expected_value, received_value):
+	match operator_direction:
+		case "config_to_api":
+			return resolve_condition_with_direction(reference=received_value, value=expected_value, operator_direction=operator_direction, operator_type=operator_type)
+		case "api_to_config":
+			return resolve_condition_with_direction(reference=expected_value, value=received_value, operator_direction=operator_direction, operator_type=operator_type)
+		case _:
+			return resolve_condition_with_direction(reference=expected_value, value=received_value, operator_direction=operator_direction, operator_type=operator_type)
+
+def remove_empty_from_dict(dict) -> dict:
 	return {key: value for key, value in dict.items() if value is not None and value != ''}
 
 def recursive_str_vars(message):

@@ -9,7 +9,7 @@ import yaml
 from flask import Flask, jsonify, request
 
 from func.logs import write_logs
-from func.utils import format_all_str_with_args, format_str_with_args
+from func.utils import format_all_str_with_args, format_str_with_args, resolve_condition
 from senders.discord import Discord, DiscordConfig
 from senders.telegram import Telegram, TelegramConfig
 
@@ -33,61 +33,71 @@ if len(config["routes"]) > 0:
 			data = request.get_json()
 			json_values = []
 			route = config["routes"][route_name]
-
-			for match_value in route.get("match_case", []):
+			sends_result = []
+			for match_value in route.get("match_case", [{}]):
 				keys_values = config.get("routes", {}).get(route_name, {}).get("match_case", {}).get(match_value, {}).get("triggers", [])
-				conditionAcceptList = []
+				condition_accept_list = []
 				for key_value in keys_values:
 					key = key_value.get("key", "")
-					value = reduce(lambda x, k: x.get(k, {}) if isinstance(x, dict) else {}, key.split("."), data)
-					espected_value = key_value.get("value", "")
-					conditionAcceptList.append(value == espected_value)
+					expected_value = key_value.get("value", "")
+					received_value = reduce(lambda x, k: x.get(k, {}) if isinstance(x, dict) else {}, key.split("."), data)
+					operator_values = key_value.get("operator", {})
+					operator_type = operator_values.get("type", "")
+					operator_direction = operator_values.get("direction", "")
+					condition_accept_list.append(resolve_condition(operator_type=operator_type, operator_direction=operator_direction, expected_value=expected_value, received_value=received_value))
+
 				condition = False
 				match config.get("routes", {}).get(route_name, {}).get("match_case", {}).get(match_value, {}).get("triggers_type", "or"):
 					case "and":
-						condition = conditionAcceptList.count(True) == len(conditionAcceptList)
+						condition = condition_accept_list.count(True) == len(condition_accept_list)
 					case "or":
-						condition = True in conditionAcceptList
+						condition = True in condition_accept_list
 					case _:
-						condition = True in conditionAcceptList
+						condition = True in condition_accept_list
 
 				if condition:
 					route = config["routes"][route_name]
-					message: str = (route.get("match_case", []).get(match_value, {}) or {}).get("message", None)
-					discord_json_config = (route.get("match_case", []).get(match_value, {}) or {}).get("discord_config", {})
-
-					msg_replaces = format_str_with_args(msg_replaces=message, data=data)
-					discord_json_config = format_all_str_with_args(json_config=discord_json_config, data=data)
-
 					senders = route.get("senders", {})
-					if msg_replaces != "" and senders != {}:
-						sends_result = []
-						for sender in senders:
-							match sender:
-								case "telegram":
-									telegram = Telegram(
-										url=f"https://api.telegram.org/bot{senders.get(sender, {}).get('bot','')}/sendMessage",
-										config=TelegramConfig(
-											chat_id=senders.get(sender, {}).get('channel_clean_id',''),
-											chat_full_id=senders.get(sender, {}).get('channel_full_id',''),
-											parse_mode=senders.get(sender, {}).get('parse_mode','MarkdownV2')
-										)
+					for sender in senders:
+						match sender:
+							case "telegram":
+								telegram = Telegram(
+									url=f"https://api.telegram.org/bot{senders.get(sender, {}).get('bot','')}/sendMessage",
+									config=TelegramConfig(
+										chat_id=senders.get(sender, {}).get('channel_clean_id',''),
+										chat_full_id=senders.get(sender, {}).get('channel_full_id',''),
+										parse_mode=senders.get(sender, {}).get('parse_mode','MarkdownV2')
 									)
-									sends_result.append(telegram.send(message=msg_replaces, data=data))
-								case "discord":
-									discord = Discord(
-										url=senders.get(sender, {}).get('url', ''),
-										config=DiscordConfig(
-											username=senders.get(sender, {}).get('username', None),
-											avatar_url=senders.get(sender, {}).get('avatar_url', None)
-										)
+								)
+
+								message: str = (route.get("match_case", [{}]).get(match_value, {}) or {}).get("message", {})
+								message_global: str = message.get("global", "")
+								telegram_message: str = message.get("telegram", {}).get("content", message_global)
+								msg_replaces = format_str_with_args(msg_replaces=telegram_message, data=data)
+								sends_result.append(telegram.send(message=msg_replaces, data=data))
+							case "discord":
+								discord = Discord(
+									url=senders.get(sender, {}).get('url', ''),
+									config=DiscordConfig(
+										username=senders.get(sender, {}).get('username', None),
+										avatar_url=senders.get(sender, {}).get('avatar_url', None)
 									)
-									discord_json_config["content"] = msg_replaces
-									sends_result.append(discord.send(json_config=discord_json_config, data=data))
-								case _:
-									pass
-						if len(sends_result) > 0:
-							return jsonify(response=f"{len(sends_result)} message{'s' if len(sends_result) > 1 else ''} has been send correctly")
+								)
+
+								message: str = (route.get("match_case", [{}]).get(match_value, {}) or {}).get("message", {})
+								message_global: str = message.get("global", "")
+								discord_json_message = message.get("discord", {})
+								discord_json_message["content"] = discord_json_message.get("content", message_global)
+								discord_json_message = format_all_str_with_args(
+									json_config=discord_json_message,
+									data=data)
+								sends_result.append(discord.send(json_config=discord_json_message, data=data))
+							case _:
+								print("pass")
+								print(f"sender = {sender}")
+								# pass
+			if len(sends_result) > 0:
+				return jsonify(response=f"{len(sends_result)} message{'s' if len(sends_result) > 1 else ''} has been send correctly")
 			return jsonify(route_name=route_name, val=json_values)
 
 		app.add_url_rule(
